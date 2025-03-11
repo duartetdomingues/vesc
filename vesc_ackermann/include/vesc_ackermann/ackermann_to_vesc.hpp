@@ -57,6 +57,7 @@ private:
   // ROS services
   rclcpp::Publisher<Float64>::SharedPtr erpm_pub_;
   rclcpp::Publisher<Float64>::SharedPtr servo_pub_;
+  rclcpp::Publisher<Float64>::SharedPtr duty_pub_;
   rclcpp::Subscription<AckermannDriveStamped>::SharedPtr ackermann_sub_;
 
   // ROS callbacks

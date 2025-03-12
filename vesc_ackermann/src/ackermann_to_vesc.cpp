@@ -32,7 +32,7 @@
 
 #include <ackermann_msgs/msg/ackermann_drive_stamped.hpp>
 #include <std_msgs/msg/float64.hpp>
-
+#include "rclcpp/rclcpp.hpp"
 #include <cmath>
 #include <sstream>
 #include <string>
@@ -59,7 +59,32 @@ AckermannToVesc::AckermannToVesc(const rclcpp::NodeOptions & options)
   steering_to_servo_gain_ = get_parameter("steering_angle_to_servo_gain").get_value<double>();
   steering_to_servo_offset_ = get_parameter("steering_angle_to_servo_offset").get_value<double>();
 
-  //offset_acc = get_parameter("steering_angle_to_servo_offset").get_value<double>();
+  // get parameter from /joy_teleop node
+
+  auto parameters_client = std::make_shared<rclcpp::SyncParametersClient>(this,"joy_teleop");
+
+  while (!parameters_client->wait_for_service(std::chrono::seconds(2))) {
+      RCLCPP_WARN(this->get_logger(), "Aguardando serviço de parâmetros...");
+  }
+
+  /* if (parameters_client->has_parameter("human_control.axis_mappings.drive-acceleration.offset")) {
+    double drive_acceleration_offset = parameters_client->get_parameter<double>("human_control.axis_mappings.drive-acceleration.offset");
+    RCLCPP_INFO(this->get_logger(), "Parâmetro 'human_control.axis_mappings.drive-acceleration.offset' = %f", drive_acceleration_offset);
+  } else {
+      RCLCPP_WARN(this->get_logger(), "Parâmetro 'human_control.axis_mappings.drive-acceleration.offset' não encontrado!");
+  } */
+  
+  /* auto parameter_names = parameters_client->list_parameters({}, 20);  // Limite de 10
+  RCLCPP_INFO(this->get_logger(), "Parâmetros disponíveis em 'joy_teleop':");
+  // Corrigindo a iteração
+  for (const auto & name : parameter_names.names) {
+    RCLCPP_INFO(this->get_logger(), "- %s", name.c_str());
+  } */
+
+  drive_acceleration_offset = parameters_client->get_parameter<double>("human_control.axis_mappings.drive-acceleration.offset");
+  drive_speed_offset = parameters_client->get_parameter<double>("human_control.axis_mappings.drive-acceleration.offset");
+  drive_jerk_offset = parameters_client->get_parameter<double>("human_control.axis_mappings.drive-acceleration.offset");
+
 
   // create publishers to vesc electric-RPM (speed) and servo commands
   erpm_pub_ = create_publisher<Float64>("commands/motor/speed", 10);
@@ -75,11 +100,11 @@ void AckermannToVesc::ackermannCmdCallback(const AckermannDriveStamped::SharedPt
 {
 
    // calc vesc duty
-   if (cmd->drive.acceleration==(float)1.0){
+   if (cmd->drive.acceleration==drive_acceleration_offset){
     cmd->drive.acceleration=0.0;
   }
 
-  if(cmd->drive.jerk==(float)1.0){
+  if(cmd->drive.jerk==drive_jerk_offset){
     cmd->drive.jerk=0.0;
   } 
 
@@ -89,32 +114,18 @@ void AckermannToVesc::ackermannCmdCallback(const AckermannDriveStamped::SharedPt
   erpm_msg.data = speed_to_erpm_gain_* (cmd->drive.jerk - cmd->drive.acceleration);
 
   Float64 duty_msg;
-  duty_msg.data = (cmd->drive.jerk - cmd->drive.acceleration)*0.1;
+  duty_msg.data = (cmd->drive.jerk - cmd->drive.acceleration);
 
-  
-
-  
-    
-  //if (cmd->drive.jerk==0.1)
-  //  cmd->drive.jerk=0.0;
-
-
-
-  
-
-
-  // calc steering angle (servo)
  
   Float64 servo_msg;
   servo_msg.data = steering_to_servo_gain_ * cmd->drive.steering_angle + steering_to_servo_offset_;
 
 
-
   // publish
   if (rclcpp::ok()) {
-    erpm_pub_->publish(erpm_msg);
+    //erpm_pub_->publish(erpm_msg);
     servo_pub_->publish(servo_msg);
-    //duty_pub_->publish(duty_msg);
+    duty_pub_->publish(duty_msg);
   }
 }
 

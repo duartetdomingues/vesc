@@ -52,6 +52,8 @@ private:
   double speed_to_erpm_gain_, speed_to_erpm_offset_;
   double steering_to_servo_gain_, steering_to_servo_offset_;
 
+  double drive_acceleration_offset,drive_speed_offset,drive_jerk_offset;  
+
   /** @todo consider also providing an interpolated look-up table conversion */
 
   // ROS services

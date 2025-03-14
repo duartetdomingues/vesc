@@ -78,14 +78,14 @@ VescDriver::VescDriver(const rclcpp::NodeOptions & options)
   }
 
   // create vesc state (telemetry) publisher
-  state_pub_ = create_publisher<VescStateStamped>("sensors/core", rclcpp::QoS{10});
-  imu_pub_ = create_publisher<VescImuStamped>("sensors/imu", rclcpp::QoS{10});
-  imu_std_pub_ = create_publisher<Imu>("sensors/imu/raw", rclcpp::QoS{10});
+  state_pub_ = create_publisher<VescStateStamped>("vesc/core", rclcpp::QoS{10});
+  imu_pub_ = create_publisher<VescImuStamped>("vesc/imu", rclcpp::QoS{10});
+  imu_std_pub_ = create_publisher<Imu>("vesc/imu/raw", rclcpp::QoS{10});
 
   // since vesc state does not include the servo position, publish the commanded
   // servo position as a "sensor"
   servo_sensor_pub_ = create_publisher<Float64>(
-    "sensors/servo_position_command", rclcpp::QoS{10});
+    "vesc/servo_position_command", rclcpp::QoS{10});
 
   // subscribe to motor and servo command topics
   duty_cycle_sub_ = create_subscription<Float64>(
@@ -210,6 +210,8 @@ void VescDriver::vescPacketCallback(const std::shared_ptr<VescPacket const> & pa
     imu_msg.header.stamp = now();
     std_imu_msg.header.stamp = now();
 
+    std_imu_msg.header.frame_id = "vesc";
+
     imu_msg.imu.ypr.x = imuData->roll();
     imu_msg.imu.ypr.y = imuData->pitch();
     imu_msg.imu.ypr.z = imuData->yaw();
@@ -231,9 +233,11 @@ void VescDriver::vescPacketCallback(const std::shared_ptr<VescPacket const> & pa
     imu_msg.imu.orientation.y = imuData->q_y();
     imu_msg.imu.orientation.z = imuData->q_z();
 
-    std_imu_msg.linear_acceleration.x = imuData->acc_x();
-    std_imu_msg.linear_acceleration.y = imuData->acc_y();
-    std_imu_msg.linear_acceleration.z = imuData->acc_z();
+    const float g = 9.80665;
+
+    std_imu_msg.linear_acceleration.x = imuData->acc_x() * g;
+    std_imu_msg.linear_acceleration.y = imuData->acc_y() * g;
+    std_imu_msg.linear_acceleration.z = imuData->acc_z() * g;
 
     std_imu_msg.angular_velocity.x = imuData->gyr_x();
     std_imu_msg.angular_velocity.y = imuData->gyr_y();
@@ -243,7 +247,7 @@ void VescDriver::vescPacketCallback(const std::shared_ptr<VescPacket const> & pa
     std_imu_msg.orientation.x = imuData->q_x();
     std_imu_msg.orientation.y = imuData->q_y();
     std_imu_msg.orientation.z = imuData->q_z();
-
+    
 
     imu_pub_->publish(imu_msg);
     imu_std_pub_->publish(std_imu_msg);

@@ -100,13 +100,18 @@ void AckermannToVesc::ackermannCmdCallback(const AckermannDriveStamped::SharedPt
 {
 
    // calc vesc duty
-   if (cmd->drive.acceleration==drive_acceleration_offset){
+   if (cmd->drive.acceleration==(float)drive_acceleration_offset){
+    //RCLCPP_INFO(this->get_logger(), "Acceleration offset");
     cmd->drive.acceleration=0.0;
   }
 
-  if(cmd->drive.jerk==drive_jerk_offset){
+  if(cmd->drive.jerk==(float)drive_jerk_offset){
+    //RCLCPP_INFO(this->get_logger(), "Jerk offset");
     cmd->drive.jerk=0.0;
   } 
+
+
+  //RCLCPP_INFO(this->get_logger(), "Acceleration,JERK: %f, %f, %f", cmd->drive.acceleration, cmd->drive.jerk, (cmd->drive.jerk - cmd->drive.acceleration));
 
   // calc vesc electric RPM (speed)
   Float64 erpm_msg;
@@ -119,7 +124,6 @@ void AckermannToVesc::ackermannCmdCallback(const AckermannDriveStamped::SharedPt
  
   Float64 servo_msg;
   servo_msg.data = steering_to_servo_gain_ * cmd->drive.steering_angle + steering_to_servo_offset_;
-
 
   // publish
   if (rclcpp::ok()) {

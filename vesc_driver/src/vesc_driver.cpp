@@ -239,14 +239,25 @@ void VescDriver::vescPacketCallback(const std::shared_ptr<VescPacket const> & pa
     std_imu_msg.linear_acceleration.y = imuData->acc_y() * g;
     std_imu_msg.linear_acceleration.z = imuData->acc_z() * g;
 
-    std_imu_msg.angular_velocity.x = imuData->gyr_x();
-    std_imu_msg.angular_velocity.y = imuData->gyr_y();
-    std_imu_msg.angular_velocity.z = imuData->gyr_z();
+    const float deg2rad = M_PI / 180.0;
+
+    std_imu_msg.angular_velocity.x = imuData->gyr_x() * deg2rad;
+    std_imu_msg.angular_velocity.y = imuData->gyr_y() * deg2rad;
+    std_imu_msg.angular_velocity.z = imuData->gyr_z() * deg2rad;
 
     std_imu_msg.orientation.w = imuData->q_w();
     std_imu_msg.orientation.x = imuData->q_x();
     std_imu_msg.orientation.y = imuData->q_y();
     std_imu_msg.orientation.z = imuData->q_z();
+
+    const float vesc_error_orientation[] = {0.01, 0.01, 0.01}; // x,y,z
+    const float vesc_error_angular_velocity[] = {0.01, 0.01, 0.05}; // x,y,z
+    const float vesc_error_linear_acceleration[] = {0.2, 0.2, 0.2}; // x,y,z [m/s2]
+
+    std_imu_msg.orientation_covariance = {std::pow(vesc_error_orientation[0], 2), 0, 0, 0, std::pow(vesc_error_orientation[1], 2), 0, 0, 0, std::pow(vesc_error_orientation[2], 2)};
+    std_imu_msg.angular_velocity_covariance = {std::pow(vesc_error_angular_velocity[0], 2), 0, 0, 0, std::pow(vesc_error_angular_velocity[1], 2), 0, 0, 0, std::pow(vesc_error_angular_velocity[2], 2)};
+    std_imu_msg.linear_acceleration_covariance = {std::pow(vesc_error_linear_acceleration[0], 2), 0, 0, 0, std::pow(vesc_error_linear_acceleration[1], 2), 0, 0, 0, std::pow(vesc_error_linear_acceleration[2], 2)};
+
     
 
     imu_pub_->publish(imu_msg);

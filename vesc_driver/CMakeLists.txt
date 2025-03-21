@@ -15,6 +15,9 @@ ament_auto_find_build_dependencies()
 
 find_package(Threads)
 
+find_package(Eigen3 REQUIRED)
+ament_export_include_directories(${EIGEN3_INCLUDE_DIR})
+
 ###########
 ## Build ##
 ###########

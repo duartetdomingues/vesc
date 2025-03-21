@@ -33,6 +33,10 @@
 #include <vesc_msgs/msg/vesc_state.hpp>
 #include <vesc_msgs/msg/vesc_state_stamped.hpp>
 
+
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2/LinearMath/Matrix3x3.h>
+
 #include <cassert>
 #include <chrono>
 #include <cmath>
@@ -105,6 +109,23 @@ VescDriver::VescDriver(const rclcpp::NodeOptions & options)
 
   // create a 50Hz timer, used for state machine & polling VESC telemetry
   timer_ = create_wall_timer(20ms, std::bind(&VescDriver::timerCallback, this));
+
+  this->declare_parameter<std::vector<double>>("imu_rot_world_matrix", std::vector<double>({1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0}));
+  this->declare_parameter<std::vector<double>>("imu_rot_sensor_matrix", std::vector<double>({1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0}));
+
+  auto imu_rot_sensor_matrix = this->get_parameter("imu_rot_sensor_matrix").as_double_array();
+  auto imu_rot_world_matrix = this->get_parameter("imu_rot_world_matrix").as_double_array();
+
+  R_sensor = Eigen::Matrix3d::Map(imu_rot_sensor_matrix.data());
+  R_world = Eigen::Matrix3d::Map(imu_rot_world_matrix.data());
+
+  std::ostringstream R_world_ss;
+  std::ostringstream R_sensor_ss;
+  R_sensor_ss << R_sensor;
+  R_world_ss << R_world;
+  //RCLCPP_INFO(get_logger(), "IMU world rotation matrix: \n%s", R_world_ss.str().c_str());
+  //RCLCPP_INFO(get_logger(), "IMU sensor rotation matrix: \n%s", R_sensor_ss.str().c_str());
+
 }
 
 /* TODO or TO-THINKABOUT LIST
@@ -239,15 +260,86 @@ void VescDriver::vescPacketCallback(const std::shared_ptr<VescPacket const> & pa
     std_imu_msg.linear_acceleration.y = imuData->acc_y() * g;
     std_imu_msg.linear_acceleration.z = imuData->acc_z() * g;
 
-    std_imu_msg.angular_velocity.x = imuData->gyr_x();
-    std_imu_msg.angular_velocity.y = imuData->gyr_y();
-    std_imu_msg.angular_velocity.z = imuData->gyr_z();
+    const float deg2rad = M_PI / 180.0;
+
+    std_imu_msg.angular_velocity.x = imuData->gyr_x() * deg2rad;
+    std_imu_msg.angular_velocity.y = imuData->gyr_y() * deg2rad;
+    std_imu_msg.angular_velocity.z = imuData->gyr_z() * deg2rad;
 
     std_imu_msg.orientation.w = imuData->q_w();
     std_imu_msg.orientation.x = imuData->q_x();
     std_imu_msg.orientation.y = imuData->q_y();
     std_imu_msg.orientation.z = imuData->q_z();
+
+    const float vesc_error_orientation[] = {0.01, 0.01, 0.01}; // x,y,z
+    const float vesc_error_angular_velocity[] = {0.01, 0.01, 0.05}; // x,y,z
+    const float vesc_error_linear_acceleration[] = {0.2, 0.2, 0.2}; // x,y,z [m/s2]
+
+    std_imu_msg.orientation_covariance = {std::pow(vesc_error_orientation[0], 2), 0, 0, 0, std::pow(vesc_error_orientation[1], 2), 0, 0, 0, std::pow(vesc_error_orientation[2], 2)};
+    std_imu_msg.angular_velocity_covariance = {std::pow(vesc_error_angular_velocity[0], 2), 0, 0, 0, std::pow(vesc_error_angular_velocity[1], 2), 0, 0, 0, std::pow(vesc_error_angular_velocity[2], 2)};
+    std_imu_msg.linear_acceleration_covariance = {std::pow(vesc_error_linear_acceleration[0], 2), 0, 0, 0, std::pow(vesc_error_linear_acceleration[1], 2), 0, 0, 0, std::pow(vesc_error_linear_acceleration[2], 2)};
     
+   /*  std_imu_msg.orientation_covariance = {0.01, 0, 0, 0, 0.01, 0, 0, 0, 0.01};
+    std_imu_msg.angular_velocity_covariance = {0.01, 0, 0, 0, 0.01, 0, 0, 0, 0.05};
+    std_imu_msg.linear_acceleration_covariance = {0.2, 0, 0, 0, 0.2, 0, 0, 0, 0.2}; */
+    
+
+    /* Eigen::Vector3d acc_imu(imuData->acc_x(), imuData->acc_y(), imuData->acc_z());
+
+    Eigen::Vector3d vel_imu(imuData->gyr_x(), imuData->gyr_y(), imuData->gyr_z());
+
+    Eigen::Vector3d acc_sensor =  R_sensor * acc_imu ;
+
+    std_imu_msg.linear_acceleration.x = acc_sensor.x()* g;
+    std_imu_msg.linear_acceleration.y = acc_sensor.y()* g;
+    std_imu_msg.linear_acceleration.z = acc_sensor.z()* g;
+
+    
+
+    tf2::Quaternion q_imu(imuData->q_x(), imuData->q_y(), imuData->q_z(), imuData->q_w());
+
+    tf2::Matrix3x3 tf_R_sensor(R_sensor(0, 0), R_sensor(0, 1), R_sensor(0, 2),
+                               R_sensor(1, 0), R_sensor(1, 1), R_sensor(1, 2),
+                               R_sensor(2, 0), R_sensor(2, 1), R_sensor(2, 2));
+    
+    RCLCPP_WARN_ONCE(get_logger(), "R_sensor: %f %f %f %f %f %f %f %f %f", tf_R_sensor[0][0], tf_R_sensor[0][1], tf_R_sensor[0][2], tf_R_sensor[1][0], tf_R_sensor[1][1], tf_R_sensor[1][2], tf_R_sensor[2][0], tf_R_sensor[2][1], tf_R_sensor[2][2]);
+    
+    tf2::Quaternion q_sensor;
+    tf_R_sensor.getRotation(q_sensor);
+
+    tf2::Quaternion q_imu_sensor = q_imu * q_sensor.inverse() - q_sensor.inverse() ;
+
+    q_imu_sensor.normalize(); */
+
+
+   /*  tf2::Matrix3x3 tf_R_world(R_world(0, 0), R_world(0, 1), R_world(0, 2),
+                               R_world(1, 0), R_world(1, 1), R_world(1, 2),
+                               R_world(2, 0), R_world(2, 1), R_world(2, 2));
+    tf2::Quaternion q_world;
+    tf_R_world.getRotation(q_world); */
+
+    
+
+    /* std_imu_msg.orientation.x = q_imu_sensor.x();
+    std_imu_msg.orientation.y = q_imu_sensor.y();
+    std_imu_msg.orientation.z = q_imu_sensor.z();
+    std_imu_msg.orientation.w = q_imu_sensor.w();
+
+    double roll, pitch, yaw;
+    tf2::Matrix3x3 tf_R_imu_sensor(q_imu_sensor);
+    tf_R_imu_sensor.getRPY(roll, pitch, yaw, false); 
+    roll = roll * 180.0 / M_PI;
+    pitch = pitch * 180.0 / M_PI;
+    yaw = yaw * 180.0 / M_PI;
+ */
+    /* std_imu_msg.angular_velocity.x = roll;
+    std_imu_msg.angular_velocity.y = pitch;
+    std_imu_msg.angular_velocity.z = yaw;
+ */
+    
+
+    //RCLCPP_INFO(get_logger(), "IMU: %f %f %f", imuData->roll(), imuData->pitch(), imuData->yaw());
+    //RCLCPP_INFO(get_logger(), "IMU: %f %f %f", imuData->acc_x(), imuData->acc_y(), imuData->acc_z());
 
     imu_pub_->publish(imu_msg);
     imu_std_pub_->publish(std_imu_msg);

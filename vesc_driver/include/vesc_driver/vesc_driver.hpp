@@ -45,6 +45,8 @@
 #include "vesc_driver/vesc_interface.hpp"
 #include "vesc_driver/vesc_packet.hpp"
 
+#include <eigen3/Eigen/Dense>
+
 namespace vesc_driver
 {
 
@@ -116,6 +118,10 @@ private:
   driver_mode_t driver_mode_;           ///< driver state machine mode (state)
   int fw_version_major_;                ///< firmware major version reported by vesc
   int fw_version_minor_;                ///< firmware minor version reported by vesc
+
+  // IMU variables
+  Eigen::Matrix3d R_sensor;  // Rotation matrix of sensor frame
+  Eigen::Matrix3d R_world;  // Rotation matrix of world frame
 
   // ROS callbacks
   void brakeCallback(const Float64::SharedPtr brake);

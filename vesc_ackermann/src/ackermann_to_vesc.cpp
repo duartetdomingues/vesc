@@ -64,7 +64,7 @@ AckermannToVesc::AckermannToVesc(const rclcpp::NodeOptions & options)
   auto parameters_client = std::make_shared<rclcpp::SyncParametersClient>(this,"joy_teleop");
 
   while (!parameters_client->wait_for_service(std::chrono::seconds(2))) {
-      RCLCPP_WARN(this->get_logger(), "Aguardando serviço de parâmetros...");
+      RCLCPP_WARN_ONCE(this->get_logger(), "Aguardando serviço de parâmetros...");
   }
 
   /* if (parameters_client->has_parameter("human_control.axis_mappings.drive-acceleration.offset")) {
@@ -123,7 +123,7 @@ void AckermannToVesc::ackermannCmdCallback(const AckermannDriveStamped::SharedPt
 
  
   Float64 servo_msg;
-  servo_msg.data = steering_to_servo_gain_ * cmd->drive.steering_angle + steering_to_servo_offset_;
+  servo_msg.data = cmd->drive.steering_angle + steering_to_servo_offset_;
 
   // publish
   if (rclcpp::ok()) {

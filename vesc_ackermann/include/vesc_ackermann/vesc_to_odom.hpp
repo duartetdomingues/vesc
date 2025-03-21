@@ -32,6 +32,8 @@
 #define VESC_ACKERMANN__VESC_TO_ODOM_HPP_
 
 #include <nav_msgs/msg/odometry.hpp>
+#include "nav_msgs/msg/path.hpp"
+
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/float64.hpp>
 #include <tf2_ros/transform_broadcaster.h>
@@ -63,6 +65,11 @@ private:
   double steering_to_servo_gain_, steering_to_servo_offset_;
   double wheelbase_;
   bool publish_tf_;
+
+  //path publisher
+  bool path_publisher_;
+  rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
+  nav_msgs::msg::Path path;
 
   // odometry state
   double x_, y_, yaw_;

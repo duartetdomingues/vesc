@@ -59,6 +59,14 @@ VescToOdom::VescToOdom(const rclcpp::NodeOptions & options)
   odom_frame_ = declare_parameter("odom_frame", odom_frame_);
   base_frame_ = declare_parameter("base_frame", base_frame_);
   use_servo_cmd_ = declare_parameter("use_servo_cmd_to_calc_angular_velocity", use_servo_cmd_);
+
+  path_publisher_ = declare_parameter("path_publish", path_publisher_);
+
+  if (path_publisher_) {
+    RCLCPP_INFO(this->get_logger(), "Publishing path");
+    std::string path_topic_ = declare_parameter("path_topic", path_topic_);
+    path_pub_ = create_publisher<nav_msgs::msg::Path>(path_topic_, 10);
+  }
   
   declare_parameter<double>("speed_to_erpm_gain", 0.0);
   declare_parameter<double>("speed_to_erpm_offset", 0.0);
@@ -104,7 +112,7 @@ void VescToOdom::vescStateCallback(const VescStateStamped::SharedPtr state)
   }
 
   // convert to engineering units
-  double current_speed = (state->state.speed - speed_to_erpm_offset_) / speed_to_erpm_gain_;
+  double current_speed = -(state->state.speed - speed_to_erpm_offset_) / speed_to_erpm_gain_;
   if (std::fabs(current_speed) < 0.05) {
     current_speed = 0.0;
   }
@@ -153,9 +161,9 @@ void VescToOdom::vescStateCallback(const VescStateStamped::SharedPtr state)
 
   // Position uncertainty
   /** @todo Think about position uncertainty, perhaps get from parameters? */
-  odom.pose.covariance[0] = 0.2;   ///< x
-  odom.pose.covariance[7] = 0.2;   ///< y
-  odom.pose.covariance[35] = 0.4;  ///< yaw
+  odom.pose.covariance[0] = std::pow(0.2, 2);  ///< x
+  odom.pose.covariance[7] = std::pow(0.2, 2);  ///< y
+  odom.pose.covariance[35] = std::pow(0.4, 2);  ///< yaw
 
   // Velocity ("in the coordinate frame given by the child_frame_id")
   odom.twist.twist.linear.x = current_speed;
@@ -164,6 +172,16 @@ void VescToOdom::vescStateCallback(const VescStateStamped::SharedPtr state)
 
   // Velocity uncertainty
   /** @todo Think about velocity uncertainty */
+
+  if (path_publisher_) {
+    path.header.stamp = state->header.stamp;
+    path.header.frame_id = odom_frame_;
+    geometry_msgs::msg::PoseStamped pose;
+    pose.header = path.header;
+    pose.pose = odom.pose.pose;
+    path.poses.push_back(pose);
+    path_pub_->publish(path);
+  }
 
   if (publish_tf_) {
     TransformStamped tf;

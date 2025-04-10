@@ -61,10 +61,16 @@ AckermannToVesc::AckermannToVesc(const rclcpp::NodeOptions & options)
 
   // get parameter from /joy_teleop node
 
-  auto parameters_client = std::make_shared<rclcpp::SyncParametersClient>(this,"joy_teleop");
+  parameters_client_joy = std::make_shared<rclcpp::SyncParametersClient>(this,"joy_teleop");
 
-  while (!parameters_client->wait_for_service(std::chrono::seconds(2))) {
+  /* while (!parameters_client_joy->wait_for_service(std::chrono::seconds(2))) {
       RCLCPP_WARN_ONCE(this->get_logger(), "Aguardando serviço de parâmetros...");
+  } */
+
+  if(!parameters_client_joy->wait_for_service(std::chrono::seconds(3))){ 
+    RCLCPP_WARN(this->get_logger(), "Joy teleop not found!");
+  } else {
+    RCLCPP_INFO(this->get_logger(), "Joy teleop found!");
   }
 
   /* if (parameters_client->has_parameter("human_control.axis_mappings.drive-acceleration.offset")) {
@@ -81,9 +87,9 @@ AckermannToVesc::AckermannToVesc(const rclcpp::NodeOptions & options)
     RCLCPP_INFO(this->get_logger(), "- %s", name.c_str());
   } */
 
-  drive_acceleration_offset = parameters_client->get_parameter<double>("human_control.axis_mappings.drive-acceleration.offset");
-  drive_speed_offset = parameters_client->get_parameter<double>("human_control.axis_mappings.drive-acceleration.offset");
-  drive_jerk_offset = parameters_client->get_parameter<double>("human_control.axis_mappings.drive-acceleration.offset");
+  drive_acceleration_offset = parameters_client_joy->get_parameter<double>("human_control.axis_mappings.drive-acceleration.offset");
+  drive_speed_offset = parameters_client_joy->get_parameter<double>("human_control.axis_mappings.drive-acceleration.offset");
+  drive_jerk_offset = parameters_client_joy->get_parameter<double>("human_control.axis_mappings.drive-acceleration.offset");
 
 
   // create publishers to vesc electric-RPM (speed) and servo commands
@@ -100,12 +106,12 @@ void AckermannToVesc::ackermannCmdCallback(const AckermannDriveStamped::SharedPt
 {
 
    // calc vesc duty
-   if (cmd->drive.acceleration==(float)drive_acceleration_offset){
+   if (parameters_client_joy->service_is_ready() && cmd->drive.acceleration==(float)drive_acceleration_offset){
     //RCLCPP_INFO(this->get_logger(), "Acceleration offset");
     cmd->drive.acceleration=0.0;
   }
 
-  if(cmd->drive.jerk==(float)drive_jerk_offset){
+  if(parameters_client_joy->service_is_ready() && cmd->drive.jerk==(float)drive_jerk_offset){
     //RCLCPP_INFO(this->get_logger(), "Jerk offset");
     cmd->drive.jerk=0.0;
   } 

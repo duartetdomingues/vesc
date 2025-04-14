@@ -71,6 +71,9 @@ AckermannToVesc::AckermannToVesc(const rclcpp::NodeOptions & options)
     RCLCPP_WARN(this->get_logger(), "Joy teleop not found!");
   } else {
     RCLCPP_INFO(this->get_logger(), "Joy teleop found!");
+    drive_acceleration_offset = parameters_client_joy->get_parameter<double>("human_control.axis_mappings.drive-acceleration.offset");
+    drive_speed_offset = parameters_client_joy->get_parameter<double>("human_control.axis_mappings.drive-acceleration.offset");
+    drive_jerk_offset = parameters_client_joy->get_parameter<double>("human_control.axis_mappings.drive-acceleration.offset");
   }
 
   /* if (parameters_client->has_parameter("human_control.axis_mappings.drive-acceleration.offset")) {
@@ -87,9 +90,7 @@ AckermannToVesc::AckermannToVesc(const rclcpp::NodeOptions & options)
     RCLCPP_INFO(this->get_logger(), "- %s", name.c_str());
   } */
 
-  drive_acceleration_offset = parameters_client_joy->get_parameter<double>("human_control.axis_mappings.drive-acceleration.offset");
-  drive_speed_offset = parameters_client_joy->get_parameter<double>("human_control.axis_mappings.drive-acceleration.offset");
-  drive_jerk_offset = parameters_client_joy->get_parameter<double>("human_control.axis_mappings.drive-acceleration.offset");
+  
 
 
   // create publishers to vesc electric-RPM (speed) and servo commands

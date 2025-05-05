@@ -40,108 +40,96 @@
 namespace vesc_ackermann
 {
 
-using ackermann_msgs::msg::AckermannDriveStamped;
-using std::placeholders::_1;
-using std_msgs::msg::Float64;
+  using ackermann_msgs::msg::AckermannDriveStamped;
+  using std::placeholders::_1;
+  using std_msgs::msg::Float64;
 
-AckermannToVesc::AckermannToVesc(const rclcpp::NodeOptions & options)
-: Node("ackermann_to_vesc_node", options)
-{
-  // declare parameters
-  declare_parameter("speed_to_erpm_gain", 0.0);
-  declare_parameter("speed_to_erpm_offset", 0.0);
-  declare_parameter("steering_angle_to_servo_gain", 0.0);
-  declare_parameter("steering_angle_to_servo_offset", 0.0);
-  
-  // get conversion parameters
-  speed_to_erpm_gain_ = get_parameter("speed_to_erpm_gain").get_value<double>();
-  speed_to_erpm_offset_ = get_parameter("speed_to_erpm_offset").get_value<double>();
-  steering_to_servo_gain_ = get_parameter("steering_angle_to_servo_gain").get_value<double>();
-  steering_to_servo_offset_ = get_parameter("steering_angle_to_servo_offset").get_value<double>();
+  AckermannToVesc::AckermannToVesc(const rclcpp::NodeOptions &options)
+      : Node("ackermann_to_vesc_node", options)
+  {
+    // declare parameters
+    declare_parameter("speed_to_erpm_gain", 0.0);
+    declare_parameter("speed_to_erpm_offset", 0.0);
+    declare_parameter("steering_angle_to_servo_gain", 0.0);
+    declare_parameter("steering_angle_to_servo_offset", 0.0);
 
-  // get parameter from /joy_teleop node
+    // get conversion parameters
+    speed_to_erpm_gain_ = get_parameter("speed_to_erpm_gain").get_value<double>();
+    speed_to_erpm_offset_ = get_parameter("speed_to_erpm_offset").get_value<double>();
+    steering_to_servo_gain_ = get_parameter("steering_angle_to_servo_gain").get_value<double>();
+    steering_to_servo_offset_ = get_parameter("steering_angle_to_servo_offset").get_value<double>();
 
-  parameters_client_joy = std::make_shared<rclcpp::SyncParametersClient>(this,"joy_teleop");
+    // get parameter from /joy_teleop node
 
-  /* while (!parameters_client_joy->wait_for_service(std::chrono::seconds(2))) {
-      RCLCPP_WARN_ONCE(this->get_logger(), "Aguardando serviço de parâmetros...");
-  } */
+    parameters_client_joy = std::make_shared<rclcpp::SyncParametersClient>(this, "joy_teleop");
 
-  if(!parameters_client_joy->wait_for_service(std::chrono::seconds(3))){ 
-    RCLCPP_WARN(this->get_logger(), "Joy teleop not found!");
-  } else {
-    RCLCPP_INFO(this->get_logger(), "Joy teleop found!");
-    drive_acceleration_offset = parameters_client_joy->get_parameter<double>("human_control.axis_mappings.drive-acceleration.offset");
-    drive_speed_offset = parameters_client_joy->get_parameter<double>("human_control.axis_mappings.drive-acceleration.offset");
-    drive_jerk_offset = parameters_client_joy->get_parameter<double>("human_control.axis_mappings.drive-acceleration.offset");
+   
+    if (!parameters_client_joy->service_is_ready())
+    {
+      RCLCPP_WARN(this->get_logger(), "Joy teleop service is not ready. Waiting...");
+      parameters_client_joy->wait_for_service();
+    }
+    else
+    {
+      RCLCPP_INFO(this->get_logger(), "Joy teleop service is ready.");
+    }
+
+    if (!parameters_client_joy->wait_for_service(std::chrono::seconds(5)))
+    {
+      RCLCPP_WARN(this->get_logger(), "Joy teleop not found!");
+      joy_active = false;
+    }
+    else
+    {
+      RCLCPP_INFO(this->get_logger(), "Joy teleop found!");
+      joy_active = true;
+    }
+
+    // create publishers to vesc electric-RPM (speed) and servo commands
+    erpm_pub_ = create_publisher<Float64>("commands/motor/speed", 10);
+    duty_pub_ = create_publisher<Float64>("commands/motor/duty_cycle", 10);
+    servo_pub_ = create_publisher<Float64>("commands/servo/position", 10);
+
+    // subscribe to ackermann topic
+    ackermann_sub_ = create_subscription<AckermannDriveStamped>(
+        "ackermann_cmd", 10, std::bind(&AckermannToVesc::ackermannCmdCallback, this, _1));
   }
 
-  /* if (parameters_client->has_parameter("human_control.axis_mappings.drive-acceleration.offset")) {
-    double drive_acceleration_offset = parameters_client->get_parameter<double>("human_control.axis_mappings.drive-acceleration.offset");
-    RCLCPP_INFO(this->get_logger(), "Parâmetro 'human_control.axis_mappings.drive-acceleration.offset' = %f", drive_acceleration_offset);
-  } else {
-      RCLCPP_WARN(this->get_logger(), "Parâmetro 'human_control.axis_mappings.drive-acceleration.offset' não encontrado!");
-  } */
-  
-  /* auto parameter_names = parameters_client->list_parameters({}, 20);  // Limite de 10
-  RCLCPP_INFO(this->get_logger(), "Parâmetros disponíveis em 'joy_teleop':");
-  // Corrigindo a iteração
-  for (const auto & name : parameter_names.names) {
-    RCLCPP_INFO(this->get_logger(), "- %s", name.c_str());
-  } */
+  void AckermannToVesc::ackermannCmdCallback(const AckermannDriveStamped::SharedPtr cmd)
+  {
 
-  
+    if (cmd->drive.acceleration > 0.0 && joy_active)
+    {
+      cmd->drive.acceleration = 0.0;
+    }
+    if (cmd->drive.jerk > 0.0 && joy_active)
+    {
+      cmd->drive.jerk = 0.0;
+    }
 
 
-  // create publishers to vesc electric-RPM (speed) and servo commands
-  erpm_pub_ = create_publisher<Float64>("commands/motor/speed", 10);
-  duty_pub_ = create_publisher<Float64>("commands/motor/duty_cycle", 10);
-  servo_pub_ = create_publisher<Float64>("commands/servo/position", 10);
+    // calc vesc electric RPM (speed)
+    Float64 erpm_msg;
+    // erpm_msg.data = speed_to_erpm_gain_ * (cmd->drive.speed) + speed_to_erpm_offset_;
+    erpm_msg.data = speed_to_erpm_gain_ * (cmd->drive.acceleration - cmd->drive.jerk);
 
-  // subscribe to ackermann topic
-  ackermann_sub_ = create_subscription<AckermannDriveStamped>(
-    "ackermann_cmd", 10, std::bind(&AckermannToVesc::ackermannCmdCallback, this, _1));
-}
+    Float64 duty_msg;
+    duty_msg.data = (cmd->drive.acceleration - cmd->drive.jerk);
 
-void AckermannToVesc::ackermannCmdCallback(const AckermannDriveStamped::SharedPtr cmd)
-{
+    Float64 servo_msg;
+    servo_msg.data = cmd->drive.steering_angle;
 
-   // calc vesc duty
-   if (parameters_client_joy->service_is_ready() && cmd->drive.acceleration==(float)drive_acceleration_offset){
-    //RCLCPP_INFO(this->get_logger(), "Acceleration offset");
-    cmd->drive.acceleration=0.0;
+    // publish
+    if (rclcpp::ok())
+    {
+      // erpm_pub_->publish(erpm_msg);
+      servo_pub_->publish(servo_msg);
+      duty_pub_->publish(duty_msg);
+    }
   }
 
-  if(parameters_client_joy->service_is_ready() && cmd->drive.jerk==(float)drive_jerk_offset){
-    //RCLCPP_INFO(this->get_logger(), "Jerk offset");
-    cmd->drive.jerk=0.0;
-  } 
+} // namespace vesc_ackermann
 
-
-  //RCLCPP_INFO(this->get_logger(), "Acceleration,JERK: %f, %f, %f", cmd->drive.acceleration, cmd->drive.jerk, (cmd->drive.jerk - cmd->drive.acceleration));
-
-  // calc vesc electric RPM (speed)
-  Float64 erpm_msg;
-  //erpm_msg.data = speed_to_erpm_gain_ * (cmd->drive.speed) + speed_to_erpm_offset_;
-  erpm_msg.data = speed_to_erpm_gain_* (cmd->drive.jerk - cmd->drive.acceleration);
-
-  Float64 duty_msg;
-  duty_msg.data = (cmd->drive.jerk - cmd->drive.acceleration);
-
- 
-  Float64 servo_msg;
-  servo_msg.data = cmd->drive.steering_angle + steering_to_servo_offset_;
-
-  // publish
-  if (rclcpp::ok()) {
-    //erpm_pub_->publish(erpm_msg);
-    servo_pub_->publish(servo_msg);
-    duty_pub_->publish(duty_msg);
-  }
-}
-
-}  // namespace vesc_ackermann
-
-#include "rclcpp_components/register_node_macro.hpp"  // NOLINT
+#include "rclcpp_components/register_node_macro.hpp" // NOLINT
 
 RCLCPP_COMPONENTS_REGISTER_NODE(vesc_ackermann::AckermannToVesc)

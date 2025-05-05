@@ -67,7 +67,6 @@ namespace vesc_ackermann
     if (!parameters_client_joy->service_is_ready())
     {
       RCLCPP_WARN(this->get_logger(), "Joy teleop service is not ready. Waiting...");
-      parameters_client_joy->wait_for_service();
     }
     else
     {

@@ -97,11 +97,11 @@ namespace vesc_ackermann
   void AckermannToVesc::ackermannCmdCallback(const AckermannDriveStamped::SharedPtr cmd)
   {
 
-    if (cmd->drive.acceleration > 0.0 && joy_active)
+    if (cmd->drive.acceleration < 0.0 && joy_active)
     {
       cmd->drive.acceleration = 0.0;
     }
-    if (cmd->drive.jerk > 0.0 && joy_active)
+    if (cmd->drive.jerk < 0.0 && joy_active)
     {
       cmd->drive.jerk = 0.0;
     }

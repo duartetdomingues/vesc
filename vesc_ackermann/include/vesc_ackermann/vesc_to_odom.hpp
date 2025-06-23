@@ -76,6 +76,13 @@ private:
   Float64::SharedPtr last_servo_cmd_;  ///< Last servo position commanded value
   VescStateStamped::SharedPtr last_state_;  ///< Last received state message
 
+  std::vector<double> pose_error_;  ///< Pose error for covariance 
+  std::vector<double> orientation_error_;  ///< Orientation error for covariance
+  std::vector<double> twist_linear_error_;  ///< Linear velocity error for covariance
+  std::vector<double> twist_angular_error_;  ///< Angular velocity error for covariance
+
+
+
   // ROS services
   rclcpp::Publisher<Odometry>::SharedPtr odom_pub_;
   rclcpp::Subscription<VescStateStamped>::SharedPtr vesc_state_sub_;

@@ -62,6 +62,11 @@ VescToOdom::VescToOdom(const rclcpp::NodeOptions & options)
 
   path_publisher_ = declare_parameter("path_publish", path_publisher_);
 
+  pose_error_ = declare_parameter<std::vector<double>>("pose_error", {0.0, 0.0, 0.0});
+  orientation_error_ = declare_parameter<std::vector<double>>("orientation_error", {0.0, 0.0, 0.0});
+  twist_linear_error_ = declare_parameter<std::vector<double>>("twist_linear_error", {0.0, 0.0, 0.0});
+  twist_angular_error_ = declare_parameter<std::vector<double>>("twist_angular_error", {0.0, 0.0, 0.0});
+  
   if (path_publisher_) {
     RCLCPP_INFO(this->get_logger(), "Publishing path");
     std::string path_topic_ = declare_parameter("path_topic", path_topic_);
@@ -122,7 +127,7 @@ void VescToOdom::vescStateCallback(const VescStateStamped::SharedPtr state)
       (last_servo_cmd_->data - steering_to_servo_offset_) / steering_to_servo_gain_;
     current_angular_velocity = current_speed * tan(current_steering_angle) / wheelbase_;
   }
-
+  
   // use current state as last state if this is our first time here
   if (!last_state_) {
     last_state_ = state;
@@ -161,9 +166,12 @@ void VescToOdom::vescStateCallback(const VescStateStamped::SharedPtr state)
 
   // Position uncertainty
   /** @todo Think about position uncertainty, perhaps get from parameters? */
-  odom.pose.covariance[0] = std::pow(0.2, 2);  ///< x
-  odom.pose.covariance[7] = std::pow(0.2, 2);  ///< y
-  odom.pose.covariance[35] = std::pow(0.4, 2);  ///< yaw
+  odom.pose.covariance[0] = std::pow(pose_error_[0], 2);  ///< x
+  odom.pose.covariance[7] = std::pow(pose_error_[1], 2);  ///< y
+  odom.pose.covariance[14] = std::pow(pose_error_[2], 2);  ///< z
+  odom.pose.covariance[21] = std::pow(orientation_error_[0], 2);  ///< roll
+  odom.pose.covariance[28] = std::pow(orientation_error_[1], 2);  ///< pitch
+  odom.pose.covariance[35] = std::pow(orientation_error_[2], 2);  ///< yaw 
 
   // Velocity ("in the coordinate frame given by the child_frame_id")
   odom.twist.twist.linear.x = current_speed;
@@ -172,6 +180,12 @@ void VescToOdom::vescStateCallback(const VescStateStamped::SharedPtr state)
 
   // Velocity uncertainty
   /** @todo Think about velocity uncertainty */
+  odom.twist.covariance[0] = std::pow(twist_linear_error_[0], 2);  ///< linear x
+  odom.twist.covariance[7] = std::pow(twist_linear_error_[1], 2);  ///< linear y
+  odom.twist.covariance[14] = std::pow(twist_angular_error_[0], 2);  ///< angular z
+  odom.twist.covariance[21] = std::pow(twist_angular_error_[1], 2);  ///< droll
+  odom.twist.covariance[28] = std::pow(twist_angular_error_[2], 2);  ///< dpitch
+  odom.twist.covariance[35] = std::pow(twist_angular_error_[2], 2);  ///< dyaw 
 
   if (path_publisher_) {
     path.header.stamp = state->header.stamp;

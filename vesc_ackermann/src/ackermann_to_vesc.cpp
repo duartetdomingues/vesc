@@ -59,6 +59,15 @@ namespace vesc_ackermann
     steering_to_servo_gain_ = get_parameter("steering_angle_to_servo_gain").get_value<double>();
     steering_to_servo_offset_ = get_parameter("steering_angle_to_servo_offset").get_value<double>();
 
+    RCLCPP_INFO(
+        this->get_logger(),
+        "Parameters: speed_to_erpm_gain = %f, speed_to_erpm_offset = %f, "
+        "steering_angle_to_servo_gain = %f, steering_angle_to_servo_offset = %f",
+        speed_to_erpm_gain_,
+        speed_to_erpm_offset_,
+        steering_to_servo_gain_,
+        steering_to_servo_offset_);
+
     // get parameter from /joy_teleop node
 
     parameters_client_joy = std::make_shared<rclcpp::SyncParametersClient>(this, "joy_teleop");
@@ -97,11 +106,11 @@ namespace vesc_ackermann
   void AckermannToVesc::ackermannCmdCallback(const AckermannDriveStamped::SharedPtr cmd)
   {
 
-    if (cmd->drive.acceleration < 0.0 && joy_active)
+    if (cmd->drive.acceleration < 0.0 )
     {
       cmd->drive.acceleration = 0.0;
     }
-    if (cmd->drive.jerk < 0.0 && joy_active)
+    if (cmd->drive.jerk < 0.0 )
     {
       cmd->drive.jerk = 0.0;
     }
@@ -116,7 +125,7 @@ namespace vesc_ackermann
     duty_msg.data = (cmd->drive.acceleration - cmd->drive.jerk);
 
     Float64 servo_msg;
-    servo_msg.data = cmd->drive.steering_angle;
+    servo_msg.data = steering_to_servo_offset_ + cmd->drive.steering_angle;
 
     // publish
     if (rclcpp::ok())

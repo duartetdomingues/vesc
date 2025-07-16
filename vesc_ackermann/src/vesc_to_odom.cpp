@@ -111,21 +111,20 @@ VescToOdom::VescToOdom(const rclcpp::NodeOptions & options)
 
 void VescToOdom::vescStateCallback(const VescStateStamped::SharedPtr state)
 {
-  // check that we have a last servo command if we are depending on it for angular velocity
-  if (use_servo_cmd_ && !last_servo_cmd_) {
-    return;
-  }
-
   // convert to engineering units
   double current_speed = (state->state.speed - speed_to_erpm_offset_) / speed_to_erpm_gain_;
   if (std::fabs(current_speed) < 0.05) {
     current_speed = 0.0;
   }
   double current_steering_angle(0.0), current_angular_velocity(0.0);
-  if (use_servo_cmd_) {
+  if (use_servo_cmd_  && last_servo_cmd_) {
     current_steering_angle =
       (last_servo_cmd_->data - steering_to_servo_offset_) / steering_to_servo_gain_;
     current_angular_velocity = current_speed * tan(current_steering_angle) / wheelbase_;
+  }
+  else {
+    // if we are not using servo commands, we assume the angular velocity is zero
+    current_angular_velocity = 0.0;
   }
   
   // use current state as last state if this is our first time here

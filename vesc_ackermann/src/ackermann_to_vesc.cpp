@@ -114,12 +114,19 @@ namespace vesc_ackermann
     {
       cmd->drive.jerk = 0.0;
     }
-
+    if (cmd->drive.speed < 0.0 )
+    {
+      cmd->drive.speed = 0.0;
+    }
+    if (cmd->drive.steering_angle_velocity< 0.0 )
+    {
+      cmd->drive.steering_angle_velocity = 0.0;
+    }
 
     // calc vesc electric RPM (speed)
     Float64 erpm_msg;
     // erpm_msg.data = speed_to_erpm_gain_ * (cmd->drive.speed) + speed_to_erpm_offset_;
-    erpm_msg.data = speed_to_erpm_gain_ * (cmd->drive.acceleration - cmd->drive.jerk);
+    erpm_msg.data = speed_to_erpm_gain_ * (cmd->drive.speed - cmd->drive.steering_angle_velocity);
 
     Float64 duty_msg;
     duty_msg.data = (cmd->drive.acceleration - cmd->drive.jerk);
@@ -130,9 +137,21 @@ namespace vesc_ackermann
     // publish
     if (rclcpp::ok())
     {
-      // erpm_pub_->publish(erpm_msg);
+      if (cmd->drive.speed!=0.0 || cmd->drive.steering_angle_velocity !=0.0)
+      {
+        erpm_pub_->publish(erpm_msg);
+      }
+      else if (cmd->drive.acceleration!=0.0 || cmd->drive.jerk !=0.0)
+      {
+        duty_pub_->publish(duty_msg);
+      }
+      else
+      {
+        Float64 stop_msg;
+        stop_msg.data = 0.0;
+        erpm_pub_->publish(stop_msg);
+      }
       servo_pub_->publish(servo_msg);
-      duty_pub_->publish(duty_msg);
     }
   }
 
